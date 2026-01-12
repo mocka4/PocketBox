@@ -1,0 +1,20 @@
+# Pocketfile — Vulnerable Flask Lab
+# For Pocketbox (Termux + Linux compatible)
+
+# -------------------------------
+# Install Python dependencies
+# -------------------------------
+RUN pip install flask
+
+# -------------------------------
+# Copy application files
+# -------------------------------
+COPY app.py app.py
+
+# Optional: copy a prebuilt SQLite DB if you have one
+COPY users.db users.db
+
+# -------------------------------
+# Runtime command
+# -------------------------------
+CMD python app.py
