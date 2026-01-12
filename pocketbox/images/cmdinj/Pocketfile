@@ -1,0 +1,12 @@
+# Pocketfile
+
+RUN pip install flask
+
+# Copy app.py into container rootfs (Termux compatible)
+COPY app.py app.py
+
+# Expose is ignored
+EXPOSE 5000
+
+# Command to run inside container
+CMD python app.py
