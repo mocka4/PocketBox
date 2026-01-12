@@ -1,3 +1,4 @@
+
 from flask import Flask, request, render_template_string
 import os, socket, sqlite3
 
@@ -6,6 +7,13 @@ app = Flask(__name__)
 # -------------------------------
 # Utility: random free port
 # -------------------------------
+
+from flask import Flask, request
+import os, socket
+
+app = Flask(__name__)
+
+ 6922d4a988b7e0410f8248cffe4f893f0689b7aa
 def find_free_port():
     s = socket.socket()
     s.bind(("", 0))
@@ -13,13 +21,15 @@ def find_free_port():
     s.close()
     return port
 
+
 # -------------------------------
 # 1️⃣ COMMAND INJECTION (existing)
 # Tool: Metasploit / Commix
-# -------------------------------
+# ------------------------------->>>>>>> 6922d4a988b7e0410f8248cffe4f893f0689b7aa
 @app.route("/cmd")
 def cmd():
     return os.popen(request.args.get("c", "")).read()
+
 
 # -------------------------------
 # 2️⃣ SQL INJECTION
@@ -69,4 +79,9 @@ def greet():
 if __name__ == "__main__":
     port = find_free_port()
     print(f"[+] Vulnerable app listening on port {port}", flush=True)
+
+if __name__ == "__main__":
+    port = find_free_port()
+    print(f"[+] Listening on port {port}", flush=True
+ 6922d4a988b7e0410f8248cffe4f893f0689b7aa
     app.run(host="0.0.0.0", port=port)
