@@ -12,6 +12,31 @@ IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 CONTAINERS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# -------------------------
+# Helpers
+# -------------------------
+
+def next_container_name(image: str) -> str:
+    existing = [
+        c.name for c in CONTAINERS_DIR.iterdir()
+        if c.name.startswith(f"{image}-")
+    ]
+
+    nums = []
+    for name in existing:
+        try:
+            nums.append(int(name.split("-")[-1]))
+        except ValueError:
+            pass
+
+    next_num = max(nums, default=0) + 1
+    return f"{image}-{next_num}"
+
+
+# -------------------------
+# Image build
+# -------------------------
+
 def build_image(source: str | None = None) -> str:
     src = Path(source) if source else Path.cwd()
     pocketfile = src / "Pocketfile"
@@ -32,13 +57,19 @@ def build_image(source: str | None = None) -> str:
             continue
         if item.is_file():
             shutil.copy(item, image_dir / item.name)
+        elif item.is_dir():
+            shutil.copytree(item, image_dir / item.name)
 
     cmd_file = image_dir / "cmd"
     if not cmd_file.exists():
-        raise RuntimeError("Missing CMD file in image")
+        raise RuntimeError("Missing cmd file in image")
 
     return image_name
 
+
+# -------------------------
+# Container lifecycle
+# -------------------------
 
 def run_container(image: str, supervised: bool = False) -> str:
     image_dir = IMAGES_DIR / image
@@ -48,7 +79,7 @@ def run_container(image: str, supervised: bool = False) -> str:
     cmd_file = image_dir / "cmd"
     cmd = cmd_file.read_text().strip().split()
 
-    name = f"{image}-1"
+    name = next_container_name(image)
     cdir = CONTAINERS_DIR / name
     cdir.mkdir(parents=True, exist_ok=True)
 
@@ -125,11 +156,10 @@ def stop_container(name: str):
 
 
 def remove_container(name: str):
-    # IMPORTANT FIX: rm must work even if already stopped
     try:
         stop_container(name)
     except RuntimeError:
-        pass  # already stopped or no pid — OK
+        pass
 
     shutil.rmtree(CONTAINERS_DIR / name, ignore_errors=True)
 
