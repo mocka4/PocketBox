@@ -3,6 +3,11 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from datetime import datetime
+import urllib.request
+import zipfile
+import tempfile
+
 
 BASE_DIR = Path.home() / ".pocketbox"
 IMAGES_DIR = BASE_DIR / "images"
@@ -11,26 +16,48 @@ CONTAINERS_DIR = BASE_DIR / "containers"
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 CONTAINERS_DIR.mkdir(parents=True, exist_ok=True)
 
-
 # -------------------------
 # Helpers
 # -------------------------
 
-def next_container_name(image: str) -> str:
-    existing = [
-        c.name for c in CONTAINERS_DIR.iterdir()
-        if c.name.startswith(f"{image}-")
-    ]
+def next_container_name(image: str, custom: str | None = None) -> str:
+    """Generate a unique container name"""
+    if custom:
+        return custom
 
-    nums = []
-    for name in existing:
-        try:
-            nums.append(int(name.split("-")[-1]))
-        except ValueError:
-            pass
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"{image}-{timestamp}"
 
-    next_num = max(nums, default=0) + 1
-    return f"{image}-{next_num}"
+
+BASE_IMAGE_REPO = "https://github.com/mocka4/pocketbox-base-images/archive/refs/heads/main.zip"
+
+def pull_image(image: str):
+    """
+    Pull a base image from the Pocketbox base image repository
+    """
+    target = IMAGES_DIR / image
+
+    if target.exists():
+        raise RuntimeError(f"Image '{image}' already exists locally")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        zip_path = Path(tmp) / "images.zip"
+
+        # Download repo
+        urllib.request.urlretrieve(BASE_IMAGE_REPO, zip_path)
+
+        # Extract
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(tmp)
+
+        extracted = Path(tmp) / "pocketbox-base-images-main" / image
+
+        if not extracted.exists():
+            raise RuntimeError(f"Base image '{image}' not found in registry")
+
+        shutil.copytree(extracted, target)
+
+    return image
 
 
 # -------------------------
@@ -71,7 +98,7 @@ def build_image(source: str | None = None) -> str:
 # Container lifecycle
 # -------------------------
 
-def run_container(image: str, supervised: bool = False) -> str:
+def run_container(image: str, supervised: bool = False, name: str | None = None) -> str:
     image_dir = IMAGES_DIR / image
     if not image_dir.exists():
         raise RuntimeError(f"Image '{image}' does not exist")
@@ -79,7 +106,7 @@ def run_container(image: str, supervised: bool = False) -> str:
     cmd_file = image_dir / "cmd"
     cmd = cmd_file.read_text().strip().split()
 
-    name = next_container_name(image)
+    name = next_container_name(image, name)
     cdir = CONTAINERS_DIR / name
     cdir.mkdir(parents=True, exist_ok=True)
 
