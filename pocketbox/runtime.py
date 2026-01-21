@@ -3,6 +3,11 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from datetime import datetime
+import urllib.request
+import zipfile
+import tempfile
+
 
 BASE_DIR = Path.home() / ".pocketbox"
 IMAGES_DIR = BASE_DIR / "images"
@@ -11,6 +16,53 @@ CONTAINERS_DIR = BASE_DIR / "containers"
 IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 CONTAINERS_DIR.mkdir(parents=True, exist_ok=True)
 
+# -------------------------
+# Helpers
+# -------------------------
+
+def next_container_name(image: str, custom: str | None = None) -> str:
+    """Generate a unique container name"""
+    if custom:
+        return custom
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"{image}-{timestamp}"
+
+
+BASE_IMAGE_REPO = "https://github.com/mocka4/pocketbox-base-images/archive/refs/heads/main.zip"
+
+def pull_image(image: str):
+    """
+    Pull a base image from the Pocketbox base image repository
+    """
+    target = IMAGES_DIR / image
+
+    if target.exists():
+        raise RuntimeError(f"Image '{image}' already exists locally")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        zip_path = Path(tmp) / "images.zip"
+
+        # Download repo
+        urllib.request.urlretrieve(BASE_IMAGE_REPO, zip_path)
+
+        # Extract
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(tmp)
+
+        extracted = Path(tmp) / "pocketbox-base-images-main" / image
+
+        if not extracted.exists():
+            raise RuntimeError(f"Base image '{image}' not found in registry")
+
+        shutil.copytree(extracted, target)
+
+    return image
+
+
+# -------------------------
+# Image build
+# -------------------------
 
 def build_image(source: str | None = None) -> str:
     src = Path(source) if source else Path.cwd()
@@ -32,15 +84,21 @@ def build_image(source: str | None = None) -> str:
             continue
         if item.is_file():
             shutil.copy(item, image_dir / item.name)
+        elif item.is_dir():
+            shutil.copytree(item, image_dir / item.name)
 
     cmd_file = image_dir / "cmd"
     if not cmd_file.exists():
-        raise RuntimeError("Missing CMD file in image")
+        raise RuntimeError("Missing cmd file in image")
 
     return image_name
 
 
-def run_container(image: str, supervised: bool = False) -> str:
+# -------------------------
+# Container lifecycle
+# -------------------------
+
+def run_container(image: str, supervised: bool = False, name: str | None = None) -> str:
     image_dir = IMAGES_DIR / image
     if not image_dir.exists():
         raise RuntimeError(f"Image '{image}' does not exist")
@@ -48,7 +106,7 @@ def run_container(image: str, supervised: bool = False) -> str:
     cmd_file = image_dir / "cmd"
     cmd = cmd_file.read_text().strip().split()
 
-    name = f"{image}-1"
+    name = next_container_name(image, name)
     cdir = CONTAINERS_DIR / name
     cdir.mkdir(parents=True, exist_ok=True)
 
@@ -125,11 +183,10 @@ def stop_container(name: str):
 
 
 def remove_container(name: str):
-    # IMPORTANT FIX: rm must work even if already stopped
     try:
         stop_container(name)
     except RuntimeError:
-        pass  # already stopped or no pid — OK
+        pass
 
     shutil.rmtree(CONTAINERS_DIR / name, ignore_errors=True)
 
